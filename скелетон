@@ -1,1 +1,10 @@
 md public\scc ; md public\js ; md components ; md config  ; md moddleware  ; md  public\img  ; md routes\api ;  md routes\views ; 
+
+ENV
+PORT=3000
+DATABASE=postgres://postgres:12345@localhost:5432/online_shop
+
+ "development": {
+    "use_env_variable": "DATABASE"
+  },
+
