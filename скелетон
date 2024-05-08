@@ -8,3 +8,97 @@ DATABASE=postgres://postgres:12345@localhost:5432/online_shop
     "use_env_variable": "DATABASE"
   },
 
+config\serverConfig
+
+const express = require("express");
+const cors = require("cors");
+const morgan = require("morgan");
+const cookieParser = require("cookie-parser");
+const session = require("express-session");
+const sessionConfig = require("./sessionConfig");
+const ssr = require("../middleware/ssr");
+const checkUser = require("../middleware/checkUser");
+
+const serverConfig = (app) => {
+  app.use(morgan("dev"));
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+  app.use(cors());
+  app.use(express.static("public"));
+  app.use(cookieParser());
+  app.use(session(sessionConfig));
+  app.use(ssr);
+  app.use(checkUser);
+};
+
+module.exports = serverConfig;
+
+config\sessionConfig
+
+const session = require("express-session");
+const sessionFileStore = require("session-file-store");
+
+const FileStore = sessionFileStore(session);
+
+const sessionConfig = {
+  store: new FileStore(), // тип хранилища - FileStore, который создаёт нам папку с файлами
+  key: "user_uid", // ключ - название куки
+  secret: `${process.env.SECRET_WORD}`, // слово используемое для шифрования, может быть любым
+  resave: true, // настройка пересохранения куки, при каждом запросе
+  saveUninitialized: false, // настройка для создания сессии, даже без авторизации
+  cookie: {
+    expires: 1000 * 60 * 60 * 12, // время "протухания" куки в миллисекундах
+    httpOnly: true, // серверная установка флага httpOnly, запрет доступа к куке для клиентского JS
+  },
+};
+
+module.exports = sessionConfig;
+
+middleware\ssr
+
+const React = require("react");
+const ReactDOMServer = require("react-dom/server");
+
+function renderComponent(component, props) {
+  const element = React.createElement(component, {
+    ...props,
+    ...this.locals,
+    ...this.app.locals,
+  });
+  const html = ReactDOMServer.renderToStaticMarkup(element);
+  this.send(`<!DOCTYPE html>\n${html}`);
+}
+
+function ssr(req, res, next) {
+  res.renderComponent = renderComponent;
+  next();
+}
+module.exports = ssr;
+
+middleware\checkUser
+
+const { User } = require("../db/models");
+
+const checkUser = async (request, response, next) => {
+  try {
+    if (request.session) {
+      if (request.session.user_sid) {
+        const user = await User.findByPk(request.session.user_sid);
+        // eslint-disable-next-line max-len
+        response.locals.user = user ? user.get() : null; // user.get() //JSON.parse(JSON.stringify(user))  === user.get()
+      } else {
+        response.locals.user = null;
+      }
+    } else {
+      response.locals.user = null;
+    }
+    next();
+  } catch (error) {
+    console.log("DONT HAVE THIS USER: ", error);
+    next(error);
+  }
+};
+module.exports = checkUser;
+
+
+
